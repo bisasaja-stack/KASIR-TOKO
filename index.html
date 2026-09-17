@@ -1,1 +1,136 @@
-KASIR-TOKO
+function doGet() {
+  return HtmlService.createTemplateFromFile('Index')
+    .evaluate()
+    .setTitle('Kasir Agen & Toko Kelontong')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+// Inisialisasi Sheet otomatis saat pertama kali dipakai
+function setupSheets() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheets = ['Pengguna', 'Transaksi', 'Stok', 'Utang'];
+  
+  sheets.forEach(function(name) {
+    if (!ss.getSheetByName(name)) {
+      var sheet = ss.insertSheet(name);
+      if (name === 'Pengguna') {
+        sheet.appendRow(['Username', 'Password']);
+        sheet.appendRow(['admin', 'admin123']); // Akun Default
+      } else if (name === 'Transaksi') {
+        sheet.appendRow(['Tanggal', 'Kategori', 'Keterangan', 'Nominal Transaksi', 'Admin / Margin']);
+      } else if (name === 'Stok') {
+        sheet.appendRow(['Nama Barang', 'Harga Beli', 'Harga Jual', 'Stok Awal', 'Terjual', 'Sisa Stok']);
+      } else if (name === 'Utang') {
+        sheet.appendRow(['Tanggal', 'Nama Pelanggan', 'Detail Utang', 'Total Utang', 'Status']);
+      }
+    }
+  });
+}
+
+// Authentikasi Login
+function CekLogin(username, password) {
+  setupSheets();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Pengguna');
+  var data = sheet.getDataRange().getValues();
+  
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0].toString() === username && data[i][1].toString() === password) {
+      return { status: "success", user: username };
+    }
+  }
+  return { status: "failed", message: "Username atau Password salah!" };
+}
+
+// Simpan Transaksi Baru
+function simpanTransaksi(kategori, keterangan, nominal, adminMargin) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Transaksi');
+  var tgl = new Date();
+  
+  sheet.appendRow([tgl, kategori, keterangan, Number(nominal), Number(adminMargin)]);
+  
+  // Jika transaksi barang toko, kurangi stok otomatis
+  if (kategori === 'Toko / Retail') {
+    var sheetStok = ss.getSheetByName('Stok');
+    var dataStok = sheetStok.getDataRange().getValues();
+    for (var i = 1; i < dataStok.length; i++) {
+      if (dataStok[i][0].toString().toLowerCase() === keterangan.toString().toLowerCase()) {
+        var terjual = Number(dataStok[i][4]) + 1;
+        var sisa = Number(dataStok[i][3]) - terjual;
+        sheetStok.getRange(i + 1, 5).setValue(terjual);
+        sheetStok.getRange(i + 1, 6).setValue(sisa);
+        break;
+      }
+    }
+  }
+  return "Transaksi berhasil disimpan!";
+}
+
+// Manajemen Stok
+function tambahStokBarang(nama, hargaBeli, hargaJual, stokAwal) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Stok');
+  sheet.appendRow([nama, Number(hargaBeli), Number(hargaJual), Number(stokAwal), 0, Number(stokAwal)]);
+  return "Barang berhasil ditambahkan!";
+}
+
+function getStokData() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Stok');
+  if (!sheet) return [];
+  var data = sheet.getDataRange().getValues();
+  data.shift(); // Hapus header
+  return data;
+}
+
+// Manajemen Utang
+function simpanUtang(nama, detail, total) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Utang');
+  sheet.appendRow([new Date(), nama, detail, Number(total), 'Belum Lunas']);
+  return "Utang berhasil dicatat!";
+}
+
+function getUtangData() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Utang');
+  if (!sheet) return [];
+  var data = sheet.getDataRange().getValues();
+  data.shift();
+  return data;
+}
+
+function bayarUtang(index) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Utang');
+  sheet.getRange(index + 2, 5).setValue('Lunas');
+  return "Status utang berhasil diubah menjadi LUNAS!";
+}
+
+// Laporan Finansial
+function getLabaRugi() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Transaksi');
+  if (!sheet) return { omset: 0, laba: 0 };
+  
+  var data = sheet.getDataRange().getValues();
+  var totalOmset = 0;
+  var totalLaba = 0;
+  
+  for (var i = 1; i < data.length; i++) {
+    totalOmset += Number(data[i][3]) || 0;
+    totalLaba += Number(data[i][4]) || 0;
+  }
+  
+  return { omset: totalOmset, laba: totalLaba };
+}
+
+function getRiwayatTransaksi() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Transaksi');
+  if (!sheet) return [];
+  var data = sheet.getDataRange().getValues();
+  data.shift();
+  return data.slice(-15).reverse(); // Tampilkan 15 transaksi terakhir
+}
